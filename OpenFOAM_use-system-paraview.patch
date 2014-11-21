@@ -1,0 +1,274 @@
+diff -rupN OpenFOAM-2.2.1/bin/tools/foamConfigurePaths OpenFOAM-2.2.1-new/bin/tools/foamConfigurePaths
+--- OpenFOAM-2.2.1/bin/tools/foamConfigurePaths	2013-06-11 11:33:58.120257167 +0200
++++ OpenFOAM-2.2.1-new/bin/tools/foamConfigurePaths	2013-10-14 00:50:49.903772370 +0200
+@@ -39,8 +39,6 @@ usage: ${0##*/}
+   --projectName name        specify project name (e.g. openfoam220)
+   --projectVersion ver      specify project version (e.g. 2.2.0)
+   --archOption arch         specify architecture option (only 32 or 64 applicable)
+-  --paraviewInstall dir     specify ParaView_DIR (e.g. /opt/paraviewopenfoam3120)
+-  --paraviewVersion ver     specify ParaView_VERSION (e.g. 3.12.0)
+ 
+ * hardcode paths to installation
+ 
+@@ -103,7 +101,7 @@ _inlineSed()
+ 
+ [ -f etc/bashrc ] || usage "Please run from top-level directory of installation"
+ 
+-unset foamInstall projectName projectVersion archOption paraviewInstall
++unset foamInstall projectName projectVersion archOption
+ 
+ # parse options
+ while [ "$#" -gt 0 ]
+@@ -164,35 +162,13 @@ do
+         fi
+         shift 2
+         ;;
+-    -paraviewInstall | --paraviewInstall)
+-        [ "$#" -ge 2 ] || usage "'$1' option requires an argument"
+-        paraviewInstall="$2"
+-        # replace ParaView_DIR=...
+-        _inlineSed \
+-            etc/config/paraview.sh \
+-            'ParaView_DIR=.*' \
+-            'ParaView_DIR='"$paraviewInstall" \
+-             "Replacing ParaView_DIR setting by '$paraviewInstall'"
+-        shift 2
+-        ;;
+-    -paraviewVersion | --paraviewVersion)
+-        [ "$#" -ge 2 ] || usage "'$1' option requires an argument"
+-        paraviewVersion="$2"
+-        # replace ParaView_VERSION=...
+-        _inlineSed \
+-            etc/config/paraview.sh \
+-            'ParaView_VERSION=.*' \
+-            'ParaView_VERSION='"$paraviewVersion" \
+-            "Replacing ParaView_VERSION setting by '$paraviewVersion'"
+-        shift 2
+-        ;;
+     *)
+         usage "unknown option/argument: '$*'"
+         ;;
+     esac
+ done
+ 
+-[ -n "$foamInstall" -o -n "$projectName" -o -n "$projectVersion" -o -n "$archOption" -o -n "$paraviewInstall" -o -n "$paraviewVersion" ] || usage "Please specify at least one configure option"
++[ -n "$foamInstall" -o -n "$projectName" -o -n "$projectVersion" -o -n "$archOption" ] || usage "Please specify at least one configure option"
+ 
+ #echo "Replacing WM_PROJECT setting by '$projectName'"
+ #sed -i -e 's@WM_PROJECT=.*@WM_PROJECT='"$projectName@" etc/bashrc
+diff -rupN OpenFOAM-2.2.1/etc/config/aliases.csh OpenFOAM-2.2.1-new/etc/config/aliases.csh
+--- OpenFOAM-2.2.1/etc/config/aliases.csh	2013-06-11 11:33:58.179257171 +0200
++++ OpenFOAM-2.2.1-new/etc/config/aliases.csh	2013-10-14 00:51:19.774271021 +0200
+@@ -47,10 +47,6 @@ alias wmUNSET='source $WM_PROJECT_DIR/et
+ alias wmSchedON 'setenv WM_SCHEDULER $WM_PROJECT_DIR/wmake/wmakeScheduler'
+ alias wmSchedOFF 'unsetenv WM_SCHEDULER'
+ 
+-# Change ParaView version
+-# ~~~~~~~~~~~~~~~~~~~~~~~
+-alias foamPV 'source `$WM_PROJECT_DIR/etc/config/paraview.csh` ParaView_VERSION=\!*; echo paraview-$ParaView_VERSION'
+-
+ 
+ # Change directory aliases
+ # ~~~~~~~~~~~~~~~~~~~~~~~~
+diff -rupN OpenFOAM-2.2.1/etc/config/paraview.csh OpenFOAM-2.2.1-new/etc/config/paraview.csh
+--- OpenFOAM-2.2.1/etc/config/paraview.csh	2013-06-11 11:33:58.180257171 +0200
++++ OpenFOAM-2.2.1-new/etc/config/paraview.csh	2013-10-14 00:57:05.141048913 +0200
+@@ -37,63 +37,20 @@
+ set cleaned=`$WM_PROJECT_DIR/bin/foamCleanPath "$PATH" "$WM_THIRD_PARTY_DIR/platforms/$WM_ARCH$WM_COMPILER/cmake- $WM_THIRD_PARTY_DIR/platforms/$WM_ARCH$WM_COMPILER/paraview-"`
+ if ( $status == 0 ) setenv PATH $cleaned
+ 
+-# determine the cmake to be used
+-unsetenv CMAKE_HOME
+-foreach cmake ( cmake-2.8.4 cmake-2.8.3 cmake-2.8.1 )
+-    set cmake=$WM_THIRD_PARTY_DIR/platforms/$WM_ARCH$WM_COMPILER/$cmake
+-    if ( -r $cmake ) then
+-        setenv CMAKE_HOME $cmake
+-        setenv PATH ${CMAKE_HOME}/bin:${PATH}
+-        break
+-    endif
+-end
+-
+ #- ParaView version, automatically determine major version:
+-setenv ParaView_VERSION 3.12.0
+-setenv ParaView_MAJOR detect
+-
++setenv ParaView_VERSION `paraview --version 2>&1 | awk '{print $3}'`
++setenv ParaView_MAJOR `echo ${ParaView_VERSION} | awk -F'.' '{print $1"."$2}'`
+ 
+-# Evaluate command-line parameters for ParaView
+-while ( $#argv > 0 )
+-    switch ($argv[1])
+-    case ParaView*=*:
+-        # name=value  -> setenv name value
+-        eval "setenv $argv[1]:s/=/ /"
+-        breaksw
+-    endsw
+-    shift
+-end
+-
+-
+-# set MAJOR version to correspond to VERSION
+-# ParaView_MAJOR is "<digits>.<digits>" from ParaView_VERSION
+-switch ("$ParaView_VERSION")
+-case "$ParaView_MAJOR".*:
+-    # version and major appear to correspond
+-    breaksw
+-
+-case [0-9]*:
+-    # extract major from the version
+-    setenv ParaView_MAJOR `echo ${ParaView_VERSION} | \
+-        sed -e 's/^\([0-9][0-9]*\.[0-9][0-9]*\).*$/\1/'`
+-    breaksw
+-endsw
+-
+-
+-set paraviewInstDir=$WM_THIRD_PARTY_DIR/ParaView-${ParaView_VERSION}
+-setenv ParaView_DIR $WM_THIRD_PARTY_DIR/platforms/$WM_ARCH$WM_COMPILER/paraview-${ParaView_VERSION}
++setenv ParaView_DIR /usr
+ 
+ # set paths if binaries or source are present
+-if ( -r $ParaView_DIR || -r $paraviewInstDir ) then
+-    setenv ParaView_INCLUDE_DIR $ParaView_DIR/include/paraview-${ParaView_MAJOR}
+-    if (! -r $ParaView_INCLUDE_DIR && -r $ParaView_DIR/include/paraview) then
+-        setenv ParaView_INCLUDE_DIR $ParaView_DIR/include/paraview
+-    endif
++if ( -r $ParaView_DIR ) then
++    setenv ParaView_INCLUDE_DIR $ParaView_DIR/include/paraview
+ 
+-    set ParaView_LIB_DIR=${ParaView_DIR}/lib/paraview-${ParaView_MAJOR}
+-    if (! -r $ParaView_LIB_DIR && -r ${ParaView_DIR}/lib/paraview) then
+-        set ParaView_LIB_DIR=${ParaView_DIR}/lib/paraview
++    if ( "`uname -m`" == "x86_64" ) then
++        libsuffix="64"
+     endif
++    set ParaView_LIB_DIR=${ParaView_DIR}/lib${libsuffix}/paraview
+ 
+     setenv PATH ${ParaView_DIR}/bin:${PATH}
+     setenv LD_LIBRARY_PATH "${ParaView_LIB_DIR}:${LD_LIBRARY_PATH}"
+@@ -112,9 +69,9 @@ if ( -r $ParaView_DIR || -r $paraviewIns
+     set paraviewPython=$ParaView_DIR/Utilities/VTKPythonWrapping
+     if ( -r $paraviewPython ) then
+         if ($?PYTHONPATH) then
+-            setenv PYTHONPATH ${PYTHONPATH}:${paraviewPython}:$ParaView_DIR/lib/paraview-${ParaView_MAJOR}
++            setenv PYTHONPATH ${PYTHONPATH}:${paraviewPython}:${ParaView_LIB_DIR}
+         else
+-            setenv PYTHONPATH ${paraviewPython}:$ParaView_DIR/lib/paraview-${ParaView_MAJOR}
++            setenv PYTHONPATH ${paraviewPython}:${ParaView_LIB_DIR}
+         endif
+     endif
+ else
+@@ -122,6 +79,6 @@ else
+ endif
+ 
+ 
+-unset cleaned cmake paraviewInstDir paraviewPython
++unset cleaned cmake paraviewPython
+ 
+ # -----------------------------------------------------------------------------
+diff -rupN OpenFOAM-2.2.1/etc/config/paraview.sh OpenFOAM-2.2.1-new/etc/config/paraview.sh
+--- OpenFOAM-2.2.1/etc/config/paraview.sh	2013-06-11 11:33:58.180257171 +0200
++++ OpenFOAM-2.2.1-new/etc/config/paraview.sh	2013-10-14 00:58:58.518946369 +0200
+@@ -36,75 +36,22 @@
+ # clean the PATH
+ cleaned=`$WM_PROJECT_DIR/bin/foamCleanPath "$PATH" "$WM_THIRD_PARTY_DIR/platforms/$WM_ARCH$WM_COMPILER/cmake- $WM_THIRD_PARTY_DIR/platforms/$WM_ARCH$WM_COMPILER/paraview-"` && PATH="$cleaned"
+ 
+-# determine the cmake to be used
+-unset CMAKE_HOME
+-for cmake in cmake-2.8.4 cmake-2.8.3 cmake-2.8.1
+-do
+-    cmake=$WM_THIRD_PARTY_DIR/platforms/$WM_ARCH$WM_COMPILER/$cmake
+-    if [ -r $cmake ]
+-    then
+-        export CMAKE_HOME=$cmake
+-        export PATH=$CMAKE_HOME/bin:$PATH
+-        break
+-    fi
+-done
+-
+-
+ #- ParaView version, automatically determine major version
+-export ParaView_VERSION=3.12.0
+-export ParaView_MAJOR=detect
++export ParaView_VERSION=$(paraview --version 2>&1 | awk '{print $3}')
++export ParaView_MAJOR=$(echo $ParaView_VERSION | awk -F'.' '{print $1"."$2}')
+ 
+ 
+-# Evaluate command-line parameters for ParaView
+-_foamParaviewEval()
+-{
+-    while [ $# -gt 0 ]
+-    do
+-        case "$1" in
+-        ParaView*=*)
+-            # name=value  -> export name=value
+-            eval "export $1"
+-            ;;
+-        esac
+-        shift
+-    done
+-}
+-
+-# Evaluate command-line parameters
+-_foamParaviewEval $@
+-
+-
+-# set MAJOR version to correspond to VERSION
+-# ParaView_MAJOR is "<digits>.<digits>" from ParaView_VERSION
+-case "$ParaView_VERSION" in
+-"$ParaView_MAJOR".* )
+-    # version and major appear to correspond
+-    ;;
+-
+-[0-9]*)
+-    # extract major from the version
+-    ParaView_MAJOR=`echo $ParaView_VERSION | sed -e 's/^\([0-9][0-9]*\.[0-9][0-9]*\).*$/\1/'`
+-    ;;
+-esac
+-export ParaView_VERSION ParaView_MAJOR
+-
+-paraviewInstDir=$WM_THIRD_PARTY_DIR/ParaView-$ParaView_VERSION
+-export ParaView_DIR=$WM_THIRD_PARTY_DIR/platforms/$WM_ARCH$WM_COMPILER/paraview-$ParaView_VERSION
++export ParaView_DIR=/usr
+ 
+ # set paths if binaries or source are present
+-if [ -r $ParaView_DIR -o -r $paraviewInstDir ]
++if [ -r $ParaView_DIR ]
+ then
+-    export ParaView_INCLUDE_DIR=$ParaView_DIR/include/paraview-$ParaView_MAJOR
+-    if [ ! -d $ParaView_INCLUDE_DIR -a -d $ParaView_DIR/include/paraview ]
+-    then
+-        export ParaView_INCLUDE_DIR=$ParaView_DIR/include/paraview
+-    fi
++    export ParaView_INCLUDE_DIR=$ParaView_DIR/include/paraview
+ 
+-    ParaView_LIB_DIR=$ParaView_DIR/lib/paraview-$ParaView_MAJOR
+-    if [ ! -d $ParaView_LIB_DIR -a -d $ParaView_DIR/lib/paraview ]
+-    then
+-        ParaView_LIB_DIR=$ParaView_DIR/lib/paraview
++    if [ "`uname -m`" == "x86_64" ]; then
++        libsuffix="64"
+     fi
++    ParaView_LIB_DIR=$ParaView_DIR/lib$libsuffix/paraview
+ 
+     export PATH=$ParaView_DIR/bin:$PATH
+     export LD_LIBRARY_PATH=$ParaView_LIB_DIR:$LD_LIBRARY_PATH
+@@ -125,9 +72,9 @@ then
+     then
+         if [ "$PYTHONPATH" ]
+         then
+-            export PYTHONPATH=$PYTHONPATH:$paraviewPython:$ParaView_DIR/lib/paraview-$ParaView_MAJOR
++            export PYTHONPATH=$PYTHONPATH:$paraviewPython:$ParaView_LIB_DIR
+         else
+-            export PYTHONPATH=$paraviewPython:$ParaView_DIR/lib/paraview-$ParaView_MAJOR
++            export PYTHONPATH=$paraviewPython:$ParaView_LIB_DIR
+         fi
+     fi
+ else
+@@ -135,6 +82,6 @@ else
+ fi
+ 
+ unset _foamParaviewEval
+-unset cleaned cmake paraviewInstDir paraviewPython
++unset cleaned cmake paraviewPython
+ 
+ # -----------------------------------------------------------------------------

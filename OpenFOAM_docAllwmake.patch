@@ -1,0 +1,16 @@
+diff -rupN OpenFOAM-2.2.1/doc/Doxygen/Allwmake OpenFOAM-2.2.1-new/doc/Doxygen/Allwmake
+--- OpenFOAM-2.2.1/doc/Doxygen/Allwmake	2013-06-11 11:33:58.121257167 +0200
++++ OpenFOAM-2.2.1-new/doc/Doxygen/Allwmake	2013-10-14 00:08:47.622691522 +0200
+@@ -13,8 +13,10 @@ set -x
+ rm -rf latex man
+ 
+ # remove html directory in background
+-mv html html-stagedRemove$$ 2> /dev/null
+-rm -rf html-stagedRemove$$ >/dev/null 2>&1 &
++if [ -d html ]; then
++  mv html html-stagedRemove$$ 2> /dev/null
++  rm -rf html-stagedRemove$$ >/dev/null 2>&1 &
++fi
+ 
+ # ensure that created files are readable by everyone
+ umask 22
